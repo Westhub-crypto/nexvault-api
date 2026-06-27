@@ -1,0 +1,46 @@
+services:
+  # Backend API
+  - type: web
+    name: nexvault-api
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_EMAIL
+        value: godwinoloja4@gmail.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DEPOSIT_WALLET_ADDRESS
+        sync: false
+      - key: ACTIVATION_WALLET_ADDRESS
+        sync: false
+      - key: GAS_FEE_WALLET_ADDRESS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: ACTIVATION_FEE
+        value: "50"
+      - key: GAS_FEE_PERCENTAGE
+        value: "10"
+
+  # Frontend
+  - type: web
+    name: nexvault-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    envVars:
+      - key: REACT_APP_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
