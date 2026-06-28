@@ -18,43 +18,25 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(mongoSanitize());
 app.use(hpp());
 
-// CORS — allow any onrender.com frontend + configured FRONTEND_URL
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  'http://localhost:3000',
-  'http://localhost:3001',
-].filter(Boolean);
-
+// CORS — allow all origins (tighten after confirming URLs)
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-    // Allow any onrender.com subdomain
-    if (origin.endsWith('.onrender.com')) return callback(null, true);
-    // Allow configured origins
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(null, true); // Allow all for now — tighten after confirming URLs
-  },
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-
-// Handle preflight
 app.options('*', cors());
 
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
-  message: 'Too many requests from this IP. Please try again later.',
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: 'Too many login attempts. Please try again later.',
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -90,21 +72,28 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ success: false, message: err.message || 'Internal server error.' });
 });
 
-// Admin seed
+// Admin seed — always force-resets password and role on every boot
 const seedAdmin = async () => {
   try {
-    const User = require('./models/User');
     const bcrypt = require('bcryptjs');
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminPass = process.env.ADMIN_PASSWORD;
-    if (!adminEmail || !adminPass) return console.log('No admin credentials in env — skipping seed.');
 
-    const existing = await User.findOne({ email: adminEmail });
+    if (!adminEmail || !adminPass) {
+      console.log('⚠️  ADMIN_EMAIL or ADMIN_PASSWORD not set in environment. Skipping admin seed.');
+      return;
+    }
+
+    const db = mongoose.connection.db;
+    const usersCol = db.collection('users');
+
+    // Always hash the password fresh
+    const hashedPassword = await bcrypt.hash(adminPass, 12);
+
+    const existing = await usersCol.findOne({ email: adminEmail });
 
     if (!existing) {
-      // Use insertOne via mongoose to bypass validation for seed fields
-      const hashedPassword = await bcrypt.hash(adminPass, 12);
-      await User.collection.insertOne({
+      await usersCol.insertOne({
         fullName: 'NexVault Admin',
         email: adminEmail,
         phone: '+00000000000',
@@ -115,24 +104,33 @@ const seedAdmin = async () => {
         activationStatus: 'approved',
         balance: 0,
         activationPaid: true,
+        withdrawalPin: null,
+        avatar: null,
+        lastLogin: null,
+        passwordChangedAt: null,
+        isEmailVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
       console.log('✅ Admin account created:', adminEmail);
     } else {
-      // Ensure existing account has admin role — update directly without validation
-      if (existing.role !== 'admin' || existing.status !== 'active') {
-        await User.collection.updateOne(
-          { email: adminEmail },
-          { $set: { role: 'admin', status: 'active', activationStatus: 'approved' } }
-        );
-        console.log('✅ Admin role restored for:', adminEmail);
-      } else {
-        console.log('✅ Admin account exists:', adminEmail);
-      }
+      // Always force-reset password + role so credentials in .env always work
+      await usersCol.updateOne(
+        { email: adminEmail },
+        {
+          $set: {
+            password: hashedPassword,
+            role: 'admin',
+            status: 'active',
+            activationStatus: 'approved',
+            updatedAt: new Date(),
+          },
+        }
+      );
+      console.log('✅ Admin password & role synced for:', adminEmail);
     }
   } catch (err) {
-    console.error('Admin seed error:', err.message);
+    console.error('❌ Admin seed error:', err.message);
   }
 };
 
