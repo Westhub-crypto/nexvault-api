@@ -63,6 +63,29 @@ app.get('/api/health', (req, res) => res.json({
   env: process.env.NODE_ENV,
 }));
 
+
+// Debug route — test login directly (remove after confirming login works)
+app.post('/api/debug/test-login', async (req, res) => {
+  try {
+    const bcrypt = require('bcryptjs');
+    const { email, password } = req.body;
+    const db = mongoose.connection.db;
+    const user = await db.collection('users').findOne({ email: email?.toLowerCase().trim() });
+    if (!user) return res.json({ found: false, message: 'No user with that email' });
+    const match = await bcrypt.compare(password, user.password);
+    res.json({
+      found: true,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      passwordMatch: match,
+      hasHashedPassword: user.password?.startsWith('$2'),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 404
 app.use((req, res) => res.status(404).json({ success: false, message: 'Route not found.' }));
 
@@ -146,4 +169,4 @@ mongoose.connect(process.env.MONGODB_URI)
     console.error('❌ MongoDB connection failed:', err.message);
     process.exit(1);
   });
-  
+                                             
