@@ -94,29 +94,38 @@ app.use((err, req, res, next) => {
 const seedAdmin = async () => {
   try {
     const User = require('./models/User');
+    const bcrypt = require('bcryptjs');
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminPass = process.env.ADMIN_PASSWORD;
     if (!adminEmail || !adminPass) return console.log('No admin credentials in env — skipping seed.');
+
     const existing = await User.findOne({ email: adminEmail });
+
     if (!existing) {
-      await User.create({
+      // Use insertOne via mongoose to bypass validation for seed fields
+      const hashedPassword = await bcrypt.hash(adminPass, 12);
+      await User.collection.insertOne({
         fullName: 'NexVault Admin',
         email: adminEmail,
-        phone: '+0000000000',
+        phone: '+00000000000',
         country: 'Global',
-        password: adminPass,
+        password: hashedPassword,
         role: 'admin',
         status: 'active',
         activationStatus: 'approved',
+        balance: 0,
+        activationPaid: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       });
       console.log('✅ Admin account created:', adminEmail);
     } else {
-      // Ensure existing account has admin role
-      if (existing.role !== 'admin') {
-        existing.role = 'admin';
-        existing.status = 'active';
-        existing.activationStatus = 'approved';
-        await existing.save();
+      // Ensure existing account has admin role — update directly without validation
+      if (existing.role !== 'admin' || existing.status !== 'active') {
+        await User.collection.updateOne(
+          { email: adminEmail },
+          { $set: { role: 'admin', status: 'active', activationStatus: 'approved' } }
+        );
         console.log('✅ Admin role restored for:', adminEmail);
       } else {
         console.log('✅ Admin account exists:', adminEmail);
