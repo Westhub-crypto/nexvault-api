@@ -35,16 +35,19 @@ exports.getWalletInfo = async (req, res) => {
     const depositAddress = process.env.DEPOSIT_WALLET_ADDRESS || 'Address not configured yet';
     const activationAddress = process.env.ACTIVATION_WALLET_ADDRESS || 'Address not configured yet';
     const gasFeeAddress = process.env.GAS_FEE_WALLET_ADDRESS || 'Address not configured yet';
-    const depositQR = await QRCode.toDataURL(depositAddress);
-    const activationQR = await QRCode.toDataURL(activationAddress);
-    const gasFeeQR = await QRCode.toDataURL(gasFeeAddress);
+    const depositQR = await QRCode.toDataURL(depositAddress, { margin: 1, width: 400 });
+    const activationQR = await QRCode.toDataURL(activationAddress, { margin: 1, width: 400 });
+    const gasFeeQR = await QRCode.toDataURL(gasFeeAddress, { margin: 1, width: 400 });
     res.json({
       success: true,
       depositAddress, depositQR,
       activationAddress, activationQR,
       gasFeeAddress, gasFeeQR,
       activationFee: process.env.ACTIVATION_FEE || 50,
-      gasFeePct: process.env.GAS_FEE_PERCENTAGE || 10
+      gasFeePct: process.env.GAS_FEE_PERCENTAGE || 10,
+      network: process.env.WALLET_NETWORK || 'TON',
+      networkFull: process.env.WALLET_NETWORK_FULL || 'TON (The Open Network)',
+      tokenSymbol: process.env.WALLET_TOKEN_SYMBOL || 'USDT',
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
